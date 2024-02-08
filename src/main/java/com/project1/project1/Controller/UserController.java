@@ -28,6 +28,7 @@ import com.project1.project1.Model.User;
 import com.project1.project1.Repository.UserRepository;
 import com.project1.project1.service.JwtService;
 import com.project1.project1.service.UserInfoService;
+import com.project1.project1.service.KafkaMessagePublisher;
 
 @RestController
 @RequestMapping("/auth")
@@ -35,6 +36,9 @@ public class UserController {
 
     @Autowired
     private JwtService jwtService;
+
+    @Autowired
+    private KafkaMessagePublisher publisher;
 
     @Autowired
     private AuthenticationManager authenticationManager;
@@ -58,8 +62,14 @@ public class UserController {
     // with this method we will save user in our database
     @PostMapping("/addUser")
     public User addUser(@RequestBody User user) {
+        publisher.sendMessageToTopic("Add User");
         user.setPassword(encoder.encode(user.getPassword()));
         return userRepo.save(user);
+    }
+
+    @PostMapping("/publish")
+    public void sendEvents(@RequestBody User user) {
+        publisher.sendEventsToTopic(user);
     }
 
     @GetMapping("/user/userProfile")
@@ -79,18 +89,15 @@ public class UserController {
     @GetMapping("/getAllUser")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public List<User> getAllUser() {
+        publisher.sendMessageToTopic("Get All User");
         return userRepo.findAll();
     }
-
-    // @GetMapping("/getUser/{id}")
-    // public User getUserById(@PathVariable String id) {
-    // return userRepo.findById(id).orElse(null);
-    // }
 
     @GetMapping("/getUser/{id}")
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<?> getUserById(@PathVariable String id) {
         // Find the user by ID
+        publisher.sendMessageToTopic("Get User");
         User user = userRepo.findById(id).orElse(null);
 
         if (user != null) {
@@ -107,12 +114,16 @@ public class UserController {
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public User updateUser(@PathVariable String id, @RequestBody User user) {
         // Check if the user with the given ID exists
+        publisher.sendMessageToTopic("Update User");
         User existingUser = userRepo.findById(id).orElse(null);
 
         if (existingUser != null) {
             // Update the existing user's properties
             existingUser.setName(user.getName());
             existingUser.setRollNumber(user.getRollNumber());
+            existingUser.setEmail(user.getEmail());
+            existingUser.setRoles(user.getRoles());
+            // existingUser.setPassword(user.getPassword());
 
             // Save the updated user
             return userRepo.save(existingUser);
@@ -124,9 +135,9 @@ public class UserController {
 
     // Delete a user by ID
     @DeleteMapping("/deleteUser/{id}")
-    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public String deleteUser(@PathVariable String id) {
         // Check if the user with the given ID exists
+        publisher.sendMessageToTopic("Delete User");
         User existingUser = userRepo.findById(id).orElse(null);
 
         if (existingUser != null) {
@@ -141,6 +152,8 @@ public class UserController {
 
     @PostMapping("/generateToken")
     public String authenticateAndGetToken(@RequestBody AuthRequest authRequest) {
+        publisher.sendMessageToTopic("Generate Token");
+
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(authRequest.getUsername(), authRequest.getPassword()));
         if (authentication.isAuthenticated()) {
